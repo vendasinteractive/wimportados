@@ -2,7 +2,7 @@
 import scrapy
 from scrapy.contrib.spiders import CrawlSpider, Rule
 from scrapy.contrib.linkextractors import LinkExtractor
-from myproject.items.MagentoProductItem import MagentoSimpleProductItem, MagentoConfigurableProductItem
+from myproject.items.MagentoProductItem import MagentoSimpleProductItem, MagentoConfigurableProductItem, MagentoBaseProductItem
 from myproject.loaders.TJMaxxSimpleProductLoader import TJMaxxSimpleProductLoader
 
 from scrapy.spider import Spider
@@ -13,7 +13,7 @@ from w3lib.html import remove_tags
 
 import json
 
-class TjmaxxspiderSpider(CrawlSpider):
+class TjmaxxSpider(CrawlSpider):
     name = "TJMaxxSpider"
     allowed_domains = ["tjmaxx.tjx.com"]
     start_urls = (
@@ -24,35 +24,17 @@ class TjmaxxspiderSpider(CrawlSpider):
         Rule(LinkExtractor(allow=("/store/jump/category",))),
         Rule(LinkExtractor(allow=("/store/jump/product", )), callback="parse_item")
     )
-
-
+    
     def parse_item(self, response):
         #self.log('Hi, this is an item page! %s' % response.url)
-
-        #determine product type (does it have variants)
-        #then load the parent as a configurable product
         
-        #if variants exist load them as simple products
-        #variants = get_variants(self, response)
-        #for variant in variants:
-        #    loader = TJMaxxSimpleProductLoader(item=MagentoProductItem(), response=response)
-        #    loader.add_xpath("sku", '//body/@id')
-        #    loader.add_xpath("name", '//div[@class="product-details"]//h1[@class="product-brand"]')
-        #    loader.add_xpath("name", '//div[@class="product-details"]//h1[@class="product-title"]')
-        #    loader.add_xpath("price", '//span[contains(@class, "product-price--offer")]')
-        #    loader.add_xpath("description", '//div[@class="product-description"]//ul[contains(@class, "description-list")]')
-        #    loader.add_xpath("image_urls", '//img[@class="main-image"]/@src')
-        #    loader.add_xpath("category", '//script[contains(., "_DataLayer")]')
-        #    loader.load_item()
-
-
         item_fields = {
-            "sku": '//div[@class="skus"]//li[@class="web-item-number"]//span[contains(@class, "number")]/text()',
             "name": '//div[@class="product-details"]//h1[@class="product-brand"]',
-            "price": '//span[contains(@class, "product-price--offer")]',
+            "manufacturer": '//div[@class="product-details"]//h1[@class="product-brand"]/text()',
+            "categories": '//script[contains(., "_DataLayer")]',
             "description": '//div[@class="product-description"]//ul[contains(@class, "description-list")]',
-            "image_urls": '//img[@class="main-image"]/@src',
-            "categories": '//script[contains(., "_DataLayer")]'
+            "price": '//span[contains(@class, "product-price--offer")]',
+            "image_urls": '//img[@class="main-image"]/@src'
         }
         
         sel = Selector(response)
@@ -62,7 +44,6 @@ class TjmaxxspiderSpider(CrawlSpider):
         data = json.loads(json_text)
         
         list = []
-        i = 0
         
         has_a_color = False
         has_a_size = False
@@ -100,52 +81,81 @@ class TjmaxxspiderSpider(CrawlSpider):
             list.append(vr)
         
 
+        #Create BaseItem
+        BaseItem = self.CreateMangentoProduct()
+        
+        simple_loader = TJMaxxSimpleProductLoader(BaseItem, response=response)
+        simple_loader.add_value("sku", parent_sku)
+        simple_loader.add_xpath("name", item_fields["name"])
+        simple_loader.add_xpath("product_name", item_fields["name"])
+        simple_loader.add_xpath("manufacturer", item_fields["manufacturer"])
+        simple_loader.add_xpath("description", item_fields["description"])
+        simple_loader.add_xpath("short_description", item_fields["description"])
+        simple_loader.add_xpath("price", item_fields["price"])
+        simple_loader.add_xpath("image_urls", item_fields["image_urls"])
+        simple_loader.add_xpath("categories", item_fields["categories"])
+        BaseItem = simple_loader.load_item()
+        
+        #simple_loader.add_value("attribute_set", "Default")
+        
         if len(list)==1:
             #This is if not a variant
-            item = MagentoSimpleProductItem()
-            
-            simple_loader = TJMaxxSimpleProductLoader(item, response=response)
-            simple_loader.add_value("sku", parent_sku)
-            simple_loader.add_value("attribute_set", "Default")
-            simple_loader.add_xpath("name", item_fields["name"])
-            simple_loader.add_xpath("product_name", item_fields["name"])
-            simple_loader.add_xpath("description", item_fields["description"])
-            simple_loader.add_xpath("short_description", item_fields["description"])
-            simple_loader.add_xpath("price", item_fields["price"])
-            simple_loader.add_xpath("image_urls", item_fields["image_urls"])
-            simple_loader.add_xpath("categories", item_fields["categories"])
-            yield simple_loader.load_item()
+            SimpleItem = MagentoSimpleProductItem(BaseItem)
+            yield SimpleItem
         else:
             for var in list:
                 #loops through all variants (e.g. simple items)
-                item = MagentoSimpleProductItem()
-                
-                simple_loader = TJMaxxSimpleProductLoader(item, response=response)
-                simple_loader.add_value("sku", var.sku)
-                simple_loader.add_value("attribute_set", var.attribute_set)
-                simple_loader.add_value("color", var.color)
-                simple_loader.add_value("size", var.size)
-                simple_loader.add_xpath("name", item_fields["name"])
-                simple_loader.add_xpath("image_urls", item_fields["image_urls"])
-                simple_loader.add_xpath("categories", item_fields["categories"])
-                yield simple_loader.load_item()
+                VariantSimpleItem = MagentoSimpleProductItem(BaseItem)
+                VariantSimpleItem["sku"] = var.sku
+                VariantSimpleItem["color"] = var.color
+                VariantSimpleItem["size"] = var.size
+                yield VariantSimpleItem
             
             if len(list)>0:
                 #this is the parent (e.g. configurable product)
-                item = MagentoConfigurableProductItem()
-
-                config_loader = TJMaxxSimpleProductLoader(item, response=response)
-                config_loader.add_value("sku", parent_sku)
-                simple_loader.add_value("attribute_set", var.attribute_set)
-                config_loader.add_xpath("name", item_fields["name"])
-                config_loader.add_xpath("description", item_fields["description"])
-                config_loader.add_xpath("price", item_fields["price"])
-                config_loader.add_xpath("image_urls", item_fields["image_urls"])
-                config_loader.add_xpath("categories", item_fields["categories"])
-                yield config_loader.load_item()
+                ConfigurableItem = MagentoConfigurableProductItem(BaseItem)
+                yield ConfigurableItem
 
 
-
+    #TODO Extract this out into common code
+    def CreateMangentoProduct(self):
+        item = MagentoBaseProductItem()
+        item["store"] = "admin"
+        item["websites"] = "base"
+        item["has_options"] = 0
+        item["page_layout"] = "No layout updates"
+        item["options_container"] = "Product Info Column"
+        item["msrp_enabled"] = "Use config"
+        item["msrp_display_actual_price_type"] = "Use config"
+        item["gift_message_available"] = "No"
+        item["min_qty"] = 0
+        item["use_config_min_qty"] = 1
+        item["is_qty_decimal"] = 0
+        item["backorders"] = 0
+        item["use_config_backorders"] = 1
+        item["min_sale_qty"] = 1
+        item["use_config_min_sale_qty"] = 1
+        item["max_sale_qty"] = 0
+        item["use_config_max_sale_qty"] = 1
+        item["use_config_notify_stock_qty"] = 1
+        item["manage_stock"] = 0
+        item["use_config_manage_stock"] = 1
+        item["stock_status_changed_auto"] = 0
+        item["use_config_qty_increments"] = 1
+        item["qty_increments"] = 0
+        item["use_config_enable_qty_inc"] = 1
+        item["enable_qty_increments"] = 0
+        item["is_decimal_divided"] = 0
+        item["stock_status_changed_automatically"] = 0
+        item["use_config_enable_qty_increments"] = 1
+        item["store_id"] = 0
+        item["product_type_id"] = "simple"
+        item["weight"] = 1
+        item["qty"] = 100
+        item["is_in_stock"] = 1
+        item["status"] = "Disabled"
+        return item        
+                
 class Variant():
     sku = None
     color = None

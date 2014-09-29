@@ -25,12 +25,11 @@ class TJMaxxSimpleProductLoader(ItemLoader):
         return y
     
     def extract_json(x):
-        json_text = x.replace("\n\t_DataLayer = ", "")
+        json_text = x.replace("_DataLayer = ", "")
         j_obj = json.loads(json_text)
         cat = j_obj["breadcrumb"]
         formated_cat = cat.replace(">", "/")
         return formated_cat
-    
     
     default_output_processor = TakeFirst()
     
@@ -44,4 +43,7 @@ class TJMaxxSimpleProductLoader(ItemLoader):
     image_urls_in = MapCompose(add_http)
     image_urls_out = Join()
     
-    categories_in = MapCompose(remove_tags, extract_json, replace_escape_chars, strip_whitespace, append_retailer)
+    categories_in = MapCompose(remove_tags, replace_escape_chars, strip_whitespace, extract_json, append_retailer)
+    
+    sku_in = Join()
+    sku_out = Join()
