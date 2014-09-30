@@ -42,12 +42,14 @@ class MagentoBaseProductItem(scrapy.Item):
     size = scrapy.Field(default="size")
     color = scrapy.Field(default="color")
     
+    #feed management dates
+    feed_updated_date = scrapy.Field()
+    created_date = scrapy.Field()
     
+    #required fields
     store = scrapy.Field()
     websites = scrapy.Field()
     type = scrapy.Field()
-    
-    
     has_options = scrapy.Field()
     meta_title = scrapy.Field()
     image = scrapy.Field()
@@ -87,16 +89,14 @@ class MagentoBaseProductItem(scrapy.Item):
     product_type_id = scrapy.Field()
     weight = scrapy.Field()
     
-    
+    original_url = scrapy.Field()
 
 
 class MagentoConfigurableProductItem(MagentoBaseProductItem):
-    visibility = "Not Visible Individually"
-    type = "configurable"
+    pass
 
 class MagentoSimpleProductItem(MagentoBaseProductItem):
-    visibility = "Catalog, Search"
-    type = "simple"
+    pass
 
 
 

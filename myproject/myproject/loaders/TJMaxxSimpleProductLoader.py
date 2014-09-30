@@ -38,7 +38,9 @@ class TJMaxxSimpleProductLoader(ItemLoader):
     
     description_in = MapCompose(replace_escape_chars, strip_whitespace, remove_tags)
     
-    price_in = MapCompose(strip_dollar_sign)
+    short_description_in = MapCompose(replace_escape_chars, strip_whitespace, remove_tags)
+    
+    price_in = MapCompose(remove_tags, strip_whitespace, replace_escape_chars, strip_dollar_sign)
     
     image_urls_in = MapCompose(add_http)
     image_urls_out = Join()

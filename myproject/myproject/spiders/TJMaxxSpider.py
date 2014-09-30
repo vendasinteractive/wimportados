@@ -12,6 +12,7 @@ from scrapy.contrib.loader.processor import TakeFirst, MapCompose, Join
 from w3lib.html import remove_tags
 
 import json
+import time
 
 class TjmaxxSpider(CrawlSpider):
     name = "TJMaxxSpider"
@@ -29,11 +30,11 @@ class TjmaxxSpider(CrawlSpider):
         #self.log('Hi, this is an item page! %s' % response.url)
         
         item_fields = {
-            "name": '//div[@class="product-details"]//h1[@class="product-brand"]',
+            "name": '//div[@class="product-details"]//h2[@class="product-title"]/text()',
             "manufacturer": '//div[@class="product-details"]//h1[@class="product-brand"]/text()',
             "categories": '//script[contains(., "_DataLayer")]',
             "description": '//div[@class="product-description"]//ul[contains(@class, "description-list")]',
-            "price": '//span[contains(@class, "product-price--offer")]',
+            "price": '//p[contains(@class, "price")]//span[contains(@class, "product-price")]',
             "image_urls": '//img[@class="main-image"]/@src'
         }
         
@@ -44,9 +45,6 @@ class TjmaxxSpider(CrawlSpider):
         data = json.loads(json_text)
         
         list = []
-        
-        has_a_color = False
-        has_a_size = False
         
         #if a single variant then make it simple product
         keys = data.keys()
@@ -94,13 +92,15 @@ class TjmaxxSpider(CrawlSpider):
         simple_loader.add_xpath("price", item_fields["price"])
         simple_loader.add_xpath("image_urls", item_fields["image_urls"])
         simple_loader.add_xpath("categories", item_fields["categories"])
+        simple_loader.add_value("original_url", "#TODO: Add Original URL")
         BaseItem = simple_loader.load_item()
-        
-        #simple_loader.add_value("attribute_set", "Default")
         
         if len(list)==1:
             #This is if not a variant
             SimpleItem = MagentoSimpleProductItem(BaseItem)
+            SimpleItem["type"] = "simple"
+            SimpleItem["attribute_set"] = "Default"
+            SimpleItem["visibility"] = "Catalog, Search"
             yield SimpleItem
         else:
             for var in list:
@@ -109,16 +109,23 @@ class TjmaxxSpider(CrawlSpider):
                 VariantSimpleItem["sku"] = var.sku
                 VariantSimpleItem["color"] = var.color
                 VariantSimpleItem["size"] = var.size
+                VariantSimpleItem["type"] = "simple"
+                VariantSimpleItem["attribute_set"] = var.attribute_set
+                VariantSimpleItem["visibility"] = "Not Visible Individually"
                 yield VariantSimpleItem
             
             if len(list)>0:
                 #this is the parent (e.g. configurable product)
                 ConfigurableItem = MagentoConfigurableProductItem(BaseItem)
+                ConfigurableItem["type"] = "configurable"
+                ConfigurableItem["attribute_set"] = list[0].attribute_set
+                ConfigurableItem["visibility"] = "Catalog, Search"
                 yield ConfigurableItem
 
 
     #TODO Extract this out into common code
     def CreateMangentoProduct(self):
+        current_timestamp = time.strftime("%Y-%m-%d")
         item = MagentoBaseProductItem()
         item["store"] = "admin"
         item["websites"] = "base"
@@ -154,6 +161,10 @@ class TjmaxxSpider(CrawlSpider):
         item["qty"] = 100
         item["is_in_stock"] = 1
         item["status"] = "Disabled"
+        
+        
+        #item["feed_updated_date"] = current_timestamp
+        #item["created_date"] = current_timestamp
         return item        
                 
 class Variant():
