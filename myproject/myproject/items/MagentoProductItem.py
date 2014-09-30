@@ -24,23 +24,23 @@ class MagentoBaseProductItem(scrapy.Item):
     sku = scrapy.Field()
     
     #common items scrapped from product detail page
-    name = scrapy.Field(default=None)
-    product_name = scrapy.Field(default="product_name")
-    manufacturer = scrapy.Field(default="manufacturer")
-    description = scrapy.Field(default="description")
-    short_description = scrapy.Field(default="short_description")    
-    price = scrapy.Field(default="price")
-    image_urls = scrapy.Field(default="image_urls")
-    categories = scrapy.Field(default="categories")    
+    name = scrapy.Field()
+    product_name = scrapy.Field()
+    manufacturer = scrapy.Field()
+    description = scrapy.Field()
+    short_description = scrapy.Field()    
+    price = scrapy.Field()
+    image_urls = scrapy.Field()
+    categories = scrapy.Field()    
     
     #data populated from Image Processor
-    images = scrapy.Field(default="images")
-    image_paths = scrapy.Field(default="image_paths")
+    images = scrapy.Field()
+    image_paths = scrapy.Field()
     
     #product variant attributes
-    attribute_set = scrapy.Field(default="attribute_set")
-    size = scrapy.Field(default="size")
-    color = scrapy.Field(default="color")
+    configurable_attributes = scrapy.Field()
+    size = scrapy.Field()
+    color = scrapy.Field()
     
     #feed management dates
     feed_updated_date = scrapy.Field()
