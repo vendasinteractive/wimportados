@@ -68,13 +68,17 @@ class TjmaxxSpider(CrawlSpider):
             #determine attribute_type
             #attribute_type can be color, size, or colorsize
             if (vr.color is not None and vr.size is None):
-                vr.attribute_set = "Color"
+                vr.configurable_attributes = "color"
+                vr.attribute_set = "ColorOnly"
             if (vr.color is None and vr.size is not None):
-                vr.attribute_set = "Size"
+                vr.configurable_attributes = "size"
+                vr.attribute_set = "SizeOnly"
             if (vr.color is not None and vr.size is not None):
-                vr.attribute_set = "'Color, Size'"
+                vr.configurable_attributes = "color, size"
+                vr.attribute_set = "ColorAndSize"
             if (vr.color is None and vr.size is None):
-                vr.attribute_set = ""
+                vr.vr.configurable_attributes = ""
+                vr.attribute_set = "Default"
             
             list.append(vr)
         
@@ -89,7 +93,8 @@ class TjmaxxSpider(CrawlSpider):
         simple_loader.add_xpath("manufacturer", item_fields["manufacturer"])
         simple_loader.add_xpath("description", item_fields["description"])
         simple_loader.add_xpath("short_description", item_fields["description"])
-        simple_loader.add_xpath("price", item_fields["price"])
+        #simple_loader.add_xpath("price", item_fields["price"])
+        simple_loader.add_value("price", "22.22")
         simple_loader.add_xpath("image_urls", item_fields["image_urls"])
         simple_loader.add_xpath("categories", item_fields["categories"])
         simple_loader.add_value("original_url", response.url)
@@ -99,7 +104,7 @@ class TjmaxxSpider(CrawlSpider):
             #This is if not a variant
             SimpleItem = MagentoSimpleProductItem(BaseItem)
             SimpleItem["type"] = "simple"
-            #SimpleItem["attribute_set"] = "Default"
+            SimpleItem["attribute_set"] = "Default"
             SimpleItem["visibility"] = "Catalog, Search"
             yield SimpleItem
         else:
@@ -110,7 +115,8 @@ class TjmaxxSpider(CrawlSpider):
                 VariantSimpleItem["color"] = var.color
                 VariantSimpleItem["size"] = var.size
                 VariantSimpleItem["type"] = "simple"
-                VariantSimpleItem["configurable_attributes"] = var.attribute_set
+                VariantSimpleItem["attribute_set"] = var.attribute_set
+                VariantSimpleItem["configurable_attributes"] = var.configurable_attributes
                 VariantSimpleItem["visibility"] = "Not Visible Individually"
                 yield VariantSimpleItem
             
@@ -118,7 +124,8 @@ class TjmaxxSpider(CrawlSpider):
                 #this is the parent (e.g. configurable product)
                 ConfigurableItem = MagentoConfigurableProductItem(BaseItem)
                 ConfigurableItem["type"] = "configurable"
-                ConfigurableItem["configurable_attributes"] = list[0].attribute_set
+                ConfigurableItem["configurable_attributes"] = list[0].configurable_attributes
+                ConfigurableItem["attribute_set"] = list[0].attribute_set
                 ConfigurableItem["visibility"] = "Catalog, Search"
                 yield ConfigurableItem
 
@@ -170,3 +177,4 @@ class Variant():
     color = None
     size = None
     attribute_set = None
+    configurable_attributes = None

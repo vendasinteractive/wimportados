@@ -86,10 +86,10 @@ class MagentoBaseProductItem(scrapy.Item):
     stock_status_changed_automatically = scrapy.Field()
     use_config_enable_qty_increments = scrapy.Field()
     store_id = scrapy.Field()
-    product_type_id = scrapy.Field()
     weight = scrapy.Field()
     
     original_url = scrapy.Field()
+    attribute_set = scrapy.Field()
 
 
 class MagentoConfigurableProductItem(MagentoBaseProductItem):
