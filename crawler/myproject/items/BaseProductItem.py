@@ -1,18 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import scrapy
-import json
-
-from scrapy.contrib.loader import ItemLoader
-from scrapy.contrib.loader.processor import TakeFirst, MapCompose, Join
-from w3lib.html import remove_tags, replace_escape_chars, replace_entities
 
 
 #handle configurable products
 #map to magmi importer file spec
 
 
-class MagentoBaseProductItem(scrapy.Item):
+class BaseProductItem(scrapy.Item):
 
     #def __init__(self):
     #    self["store"] = "store"
@@ -90,17 +85,6 @@ class MagentoBaseProductItem(scrapy.Item):
     
     original_url = scrapy.Field()
     attribute_set = scrapy.Field()
-
-
-class MagentoConfigurableProductItem(MagentoBaseProductItem):
-    pass
-
-class MagentoSimpleProductItem(MagentoBaseProductItem):
-    pass
-
-
-
-
 
 
 #type = "simple"

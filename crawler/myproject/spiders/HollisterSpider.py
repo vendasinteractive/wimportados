@@ -2,11 +2,12 @@
 import scrapy
 from scrapy.contrib.spiders import SitemapSpider
 from scrapy.contrib.loader import ItemLoader
-from myproject.items.MagentoProductItem import MagentoSimpleProductItem
+from myproject.items.SimpleProductItem import SimpleProductItem
 from myproject.loaders.HollisterProductLoader import HollisterProductLoader
 
-from myproject.items.MagentoProductItem import MagentoSimpleProductItem, MagentoConfigurableProductItem, MagentoBaseProductItem
-from myproject.loaders.TJMaxxSimpleProductLoader import TJMaxxSimpleProductLoader
+from myproject.items.SimpleProductItem import SimpleProductItem, BaseProductItem
+from myproject.items.ConfigurableProductItem import ConfigurableProductItem
+from myproject.loaders.TJMaxxProductLoader import TJMaxxProductLoader
 
 from scrapy.spider import Spider
 from scrapy.selector import Selector
@@ -40,14 +41,14 @@ class HollisterSpider(SitemapSpider):
     def parse_shop(self, response):
 
         #Create BaseItem
-        BaseItem = ProductFactory.CreateMangentoProduct()
+        BaseItem = ProductFactory.create_base_product_item()
 
-        SimpleItem = MagentoSimpleProductItem(BaseItem)
+        SimpleItem = SimpleProductItem(BaseItem)
         SimpleItem["type"] = "simple"
         #SimpleItem["attribute_set"] = "Default"
         SimpleItem["visibility"] = "Catalog, Search"
 
-        loader = HollisterProductLoader(item=MagentoSimpleProductItem(BaseItem), response=response)
+        loader = HollisterProductLoader(item=SimpleProductItem(BaseItem), response=response)
         
         for field, xpath in self.item_fields.iteritems():
             loader.add_xpath(field, xpath)

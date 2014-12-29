@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
-import scrapy
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from myproject.items.MagentoProductItem import MagentoSimpleProductItem, MagentoConfigurableProductItem, MagentoBaseProductItem
-from myproject.loaders.TJMaxxSimpleProductLoader import TJMaxxSimpleProductLoader
-
-from scrapy.spider import Spider
-from scrapy.selector import Selector
-from scrapy.contrib.loader import ItemLoader
-from scrapy.contrib.loader.processor import TakeFirst, MapCompose, Join
-from w3lib.html import remove_tags
-
 import json
 import time
+
+from scrapy.contrib.spiders import CrawlSpider, Rule
+from scrapy.contrib.linkextractors import LinkExtractor
+from scrapy.selector import Selector
+
+from myproject.items.BaseProductItem import BaseProductItem
+from myproject.items.SimpleProductItem import SimpleProductItem
+from myproject.items.ConfigurableProductItem import ConfigurableProductItem
+from myproject.items.ProductVariant import ProductVariant
+from myproject.loaders.TJMaxxProductLoader import TJMaxxProductLoader
+from myproject.items.ProductFactory import ProductFactory
 
 class TjmaxxSpider(CrawlSpider):
     name = "TJMaxxSpider"
@@ -25,7 +24,86 @@ class TjmaxxSpider(CrawlSpider):
         Rule(LinkExtractor(allow=("/store/jump/category",))),
         Rule(LinkExtractor(allow=("/store/jump/product", )), callback="parse_item")
     )
-    
+
+
+    def get_clean_json_data(self, response):
+        selector = Selector(response)
+        script_data = selector.xpath('//script[contains(., "TJXdata.productData")]//text()')
+        variant_list = script_data.extract()
+        json_text = variant_list[0].replace("var TJXdata = TJXdata || {};\n\t\tTJXdata.productData =", "")
+        clean_json_data = json.loads(json_text)
+        return clean_json_data
+
+
+    def create_tjmaxx_base_product_item(self, item_fields, parent_sku, response):
+        # Create tjmaxx_base_product_item
+        factory =  ProductFactory()
+        base_product_item = factory.create_base_product_item()
+        loader = TJMaxxProductLoader(base_product_item, response=response)
+        loader.add_value("sku", parent_sku)
+        loader.add_xpath("name", item_fields["name"])
+        loader.add_xpath("product_name", item_fields["name"])
+        loader.add_xpath("manufacturer", item_fields["manufacturer"])
+        loader.add_xpath("description", item_fields["description"])
+        loader.add_xpath("short_description", item_fields["description"])
+        #loader.add_xpath("price", item_fields["price"])
+        loader.add_value("price", "22.22")
+        loader.add_xpath("image_urls", item_fields["image_urls"])
+        loader.add_xpath("categories", item_fields["categories"])
+        loader.add_value("original_url", response.url)
+        tjmaxx_base_product_item = loader.load_item()
+
+        return tjmaxx_base_product_item
+
+
+    def get_variant_list(self, data, keys, parent_sku):
+        variant_list = []
+        for sku in data[keys[0]]["skus"]:
+            variant = ProductVariant()
+            for variant_key in sku["variants"].keys():
+                if (len(sku["variants"][variant_key]["displayName"]) <= 2):
+                    variant.size = sku["variants"][variant_key]["displayName"]
+                else:
+                    variant.color = sku["variants"][variant_key]["displayName"]
+            variant.sku = parent_sku
+
+            # set configurable attributes and attribute set for variants
+            if (variant.color is not None and variant.size is None):
+                variant.configurable_attributes = "color"
+                variant.attribute_set = "ColorOnly"
+            if (variant.color is None and variant.size is not None):
+                variant.configurable_attributes = "size"
+                variant.attribute_set = "SizeOnly"
+            if (variant.color is not None and variant.size is not None):
+                variant.configurable_attributes = "color, size"
+                variant.attribute_set = "ColorAndSize"
+            if (variant.color is None and variant.size is None):
+                variant.configurable_attributes = ""
+                variant.attribute_set = "Default"
+
+            variant_list.append(variant)
+        return variant_list
+
+    def create_tjmaxx_simple_product_item(self, BaseItem):
+        factory = ProductFactory()
+        simple_item = factory.create_simple_product_item(BaseItem)
+        return simple_item
+
+
+    def create_tjmaxx_simple_variant_product_item(self, BaseItem, variant):
+        factory = ProductFactory()
+        simple_variant_product_item = factory.get_simple_variant_product_item(BaseItem, variant)
+        return simple_variant_product_item
+
+
+    def create_configurable_product_item(self, BaseItem, variant_list):
+        configurable_attributes = variant_list[0].configurable_attributes
+        attribute_set = variant_list[0].attribute_set
+
+        factory = ProductFactory()
+        configurable_item = factory.get_configurable_product_item(BaseItem, attribute_set, configurable_attributes)
+        return configurable_item
+
     def parse_item(self, response):
         #self.log('Hi, this is an item page! %s' % response.url)
         
@@ -33,148 +111,29 @@ class TjmaxxSpider(CrawlSpider):
             "name": '//div[@class="product-details"]//h2[@class="product-title"]/text()',
             "manufacturer": '//div[@class="product-details"]//h1[@class="product-brand"]/text()',
             "categories": '//script[contains(., "_DataLayer")]',
-            "description": '//div[@class="product-description"]//ul[contains(@class, "description-list")]',
+            "description": '//div[@class="product-description"]//ul[contains(@class, "description-variant_list")]',
             "price": '//p[contains(@class, "price")]//span[contains(@class, "product-price")]',
             "image_urls": '//img[@class="main-image"]/@src'
         }
-        
-        sel = Selector(response)
-        script_data = sel.xpath('//script[contains(., "TJXdata.productData")]//text()')
-        variant_list = script_data.extract()
-        json_text = variant_list[0].replace("var TJXdata = TJXdata || {};\n\t\tTJXdata.productData =", "")
-        data = json.loads(json_text)
-        
-        list = []
-        
-        #if a single variant then make it simple product
+
+        data = self.get_clean_json_data(response)
         keys = data.keys()
         parent_sku = keys[0]
-        for sku in data[keys[0]]["skus"]:
-            vr = Variant()
-            for var_key in sku["variants"].keys():
-                if(len(sku["variants"][var_key]["displayName"]) <=2):
-                    vr.size=sku["variants"][var_key]["displayName"]
-                else:
-                    vr.color=sku["variants"][var_key]["displayName"]
-            
-            vr.sku = parent_sku
-            if (vr.color is not None):
-                vr.sku = vr.sku + "_" + vr.color
-                has_a_color = True
-            if (vr.size is not None):
-                vr.sku = vr.sku + "_" + vr.size
-                has_a_size = True
-            
-            #determine attribute_type
-            #attribute_type can be color, size, or colorsize
-            if (vr.color is not None and vr.size is None):
-                vr.configurable_attributes = "color"
-                vr.attribute_set = "ColorOnly"
-            if (vr.color is None and vr.size is not None):
-                vr.configurable_attributes = "size"
-                vr.attribute_set = "SizeOnly"
-            if (vr.color is not None and vr.size is not None):
-                vr.configurable_attributes = "color, size"
-                vr.attribute_set = "ColorAndSize"
-            if (vr.color is None and vr.size is None):
-                vr.vr.configurable_attributes = ""
-                vr.attribute_set = "Default"
-            
-            list.append(vr)
-        
 
-        #Create BaseItem
-        BaseItem = self.CreateMangentoProduct()
+        base_item = self.create_tjmaxx_base_product_item(item_fields, parent_sku, response)
+        variant_list = self.get_variant_list(data, keys, parent_sku)
         
-        simple_loader = TJMaxxSimpleProductLoader(BaseItem, response=response)
-        simple_loader.add_value("sku", parent_sku)
-        simple_loader.add_xpath("name", item_fields["name"])
-        simple_loader.add_xpath("product_name", item_fields["name"])
-        simple_loader.add_xpath("manufacturer", item_fields["manufacturer"])
-        simple_loader.add_xpath("description", item_fields["description"])
-        simple_loader.add_xpath("short_description", item_fields["description"])
-        #simple_loader.add_xpath("price", item_fields["price"])
-        simple_loader.add_value("price", "22.22")
-        simple_loader.add_xpath("image_urls", item_fields["image_urls"])
-        simple_loader.add_xpath("categories", item_fields["categories"])
-        simple_loader.add_value("original_url", response.url)
-        BaseItem = simple_loader.load_item()
-        
-        if len(list)==1:
+        if len(variant_list)==1:
             #This is if not a variant
-            SimpleItem = MagentoSimpleProductItem(BaseItem)
-            SimpleItem["type"] = "simple"
-            SimpleItem["attribute_set"] = "Default"
-            SimpleItem["visibility"] = "Catalog, Search"
-            yield SimpleItem
+            simple_item = self.create_tjmaxx_simple_product_item(base_item)
+            yield simple_item
         else:
-            for var in list:
+            for variant in variant_list:
                 #loops through all variants (e.g. simple items)
-                VariantSimpleItem = MagentoSimpleProductItem(BaseItem)
-                VariantSimpleItem["sku"] = var.sku
-                VariantSimpleItem["color"] = var.color
-                VariantSimpleItem["size"] = var.size
-                VariantSimpleItem["type"] = "simple"
-                VariantSimpleItem["attribute_set"] = var.attribute_set
-                VariantSimpleItem["configurable_attributes"] = var.configurable_attributes
-                VariantSimpleItem["visibility"] = "Not Visible Individually"
-                yield VariantSimpleItem
+                simple_item = self.create_tjmaxx_simple_variant_product_item(base_item, variant)
+                yield simple_item
             
-            if len(list)>0:
+            if len(variant_list)>0:
                 #this is the parent (e.g. configurable product)
-                ConfigurableItem = MagentoConfigurableProductItem(BaseItem)
-                ConfigurableItem["type"] = "configurable"
-                ConfigurableItem["configurable_attributes"] = list[0].configurable_attributes
-                ConfigurableItem["attribute_set"] = list[0].attribute_set
-                ConfigurableItem["visibility"] = "Catalog, Search"
-                yield ConfigurableItem
-
-
-    #TODO Extract this out into common code
-    def CreateMangentoProduct(self):
-        current_timestamp = time.strftime("%Y-%m-%d")
-        item = MagentoBaseProductItem()
-        item["store"] = "admin"
-        item["websites"] = "base"
-        item["has_options"] = 0
-        item["page_layout"] = "No layout updates"
-        item["options_container"] = "Product Info Column"
-        item["msrp_enabled"] = "Use config"
-        item["msrp_display_actual_price_type"] = "Use config"
-        item["gift_message_available"] = "No"
-        item["min_qty"] = 0
-        item["use_config_min_qty"] = 1
-        item["is_qty_decimal"] = 0
-        item["backorders"] = 0
-        item["use_config_backorders"] = 1
-        item["min_sale_qty"] = 1
-        item["use_config_min_sale_qty"] = 1
-        item["max_sale_qty"] = 0
-        item["use_config_max_sale_qty"] = 1
-        item["use_config_notify_stock_qty"] = 1
-        item["manage_stock"] = 0
-        item["use_config_manage_stock"] = 1
-        item["stock_status_changed_auto"] = 0
-        item["use_config_qty_increments"] = 1
-        item["qty_increments"] = 0
-        item["use_config_enable_qty_inc"] = 1
-        item["enable_qty_increments"] = 0
-        item["is_decimal_divided"] = 0
-        item["stock_status_changed_automatically"] = 0
-        item["use_config_enable_qty_increments"] = 1
-        item["weight"] = 1
-        item["qty"] = 100
-        item["is_in_stock"] = 1
-        item["status"] = "Disabled"
-        
-        
-        item["feed_updated_date"] = current_timestamp
-        item["created_date"] = current_timestamp
-        return item        
-                
-class Variant():
-    sku = None
-    color = None
-    size = None
-    attribute_set = None
-    configurable_attributes = None
+                configurable_item = self.create_configurable_product_item(base_item, variant_list)
+                yield configurable_item

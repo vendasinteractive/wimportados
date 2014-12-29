@@ -1,11 +1,13 @@
-from myproject.items.MagentoProductItem import MagentoSimpleProductItem, MagentoConfigurableProductItem, MagentoBaseProductItem
+from myproject.items.BaseProductItem import BaseProductItem
+from myproject.items.SimpleProductItem import SimpleProductItem
+from myproject.items.ConfigurableProductItem import ConfigurableProductItem
 import time
 
 class ProductFactory():
 
-    def CreateMangentoProduct(self):
+    def create_base_product_item(self):
         current_timestamp = time.strftime("%Y-%m-%d")
-        item = MagentoBaseProductItem()
+        item = BaseProductItem()
         item["store"] = "admin"
         item["websites"] = "base"
         item["has_options"] = 0
@@ -49,3 +51,36 @@ class ProductFactory():
 
     def CreateConfigurableMagentoProduct(self):
         pass
+
+    def create_simple_product_item(self, BaseItem):
+        simple_item = SimpleProductItem(BaseItem)
+        simple_item["type"] = "simple"
+        simple_item["attribute_set"] = "Default"
+        simple_item["visibility"] = "Catalog, Search"
+        return simple_item
+
+    def get_configurable_product_item(self, BaseItem, attribute_set, configurable_attributes):
+        configurable_item = ConfigurableProductItem(BaseItem)
+        configurable_item["type"] = "configurable"
+        configurable_item["configurable_attributes"] = configurable_attributes
+        configurable_item["attribute_set"] = attribute_set
+        configurable_item["visibility"] = "Catalog, Search"
+        return configurable_item
+
+    def get_simple_variant_product_item(self, BaseItem, variant):
+
+        #create sub sku for variants
+        if (variant.color is not None):
+            variant.sku = variant.sku + "_" + variant.color
+        if (variant.size is not None):
+            variant.sku = variant.sku + "_" + variant.size
+
+        simple_variant_product_item = SimpleProductItem(BaseItem)
+        simple_variant_product_item["sku"] = variant.sku
+        simple_variant_product_item["color"] = variant.color
+        simple_variant_product_item["size"] = variant.size
+        simple_variant_product_item["type"] = "simple"
+        simple_variant_product_item["attribute_set"] = variant.attribute_set
+        simple_variant_product_item["configurable_attributes"] = variant.configurable_attributes
+        simple_variant_product_item["visibility"] = "Not Visible Individually"
+        return simple_variant_product_item

@@ -8,7 +8,7 @@ from scrapy.contrib.loader.processor import TakeFirst, MapCompose, Join
 from w3lib.html import remove_tags, replace_escape_chars, replace_entities
 
 
-class TJMaxxSimpleProductLoader(ItemLoader):
+class TJMaxxProductLoader(ItemLoader):
     
     def strip_dollar_sign(x):
         return  x.strip("$")
