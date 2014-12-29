@@ -6,9 +6,6 @@ from scrapy.contrib.spiders import CrawlSpider, Rule
 from scrapy.contrib.linkextractors import LinkExtractor
 from scrapy.selector import Selector
 
-from myproject.items.BaseProductItem import BaseProductItem
-from myproject.items.SimpleProductItem import SimpleProductItem
-from myproject.items.ConfigurableProductItem import ConfigurableProductItem
 from myproject.items.ProductVariant import ProductVariant
 from myproject.loaders.TJMaxxProductLoader import TJMaxxProductLoader
 from myproject.items.ProductFactory import ProductFactory
@@ -25,6 +22,7 @@ class TjmaxxSpider(CrawlSpider):
         Rule(LinkExtractor(allow=("/store/jump/product", )), callback="parse_item")
     )
 
+    factory = ProductFactory()
 
     def get_clean_json_data(self, response):
         selector = Selector(response)
@@ -37,8 +35,7 @@ class TjmaxxSpider(CrawlSpider):
 
     def create_tjmaxx_base_product_item(self, item_fields, parent_sku, response):
         # Create tjmaxx_base_product_item
-        factory =  ProductFactory()
-        base_product_item = factory.create_base_product_item()
+        base_product_item = self.factory.create_base_product_item()
         loader = TJMaxxProductLoader(base_product_item, response=response)
         loader.add_value("sku", parent_sku)
         loader.add_xpath("name", item_fields["name"])
@@ -84,25 +81,6 @@ class TjmaxxSpider(CrawlSpider):
             variant_list.append(variant)
         return variant_list
 
-    def create_tjmaxx_simple_product_item(self, BaseItem):
-        factory = ProductFactory()
-        simple_item = factory.create_simple_product_item(BaseItem)
-        return simple_item
-
-
-    def create_tjmaxx_simple_variant_product_item(self, BaseItem, variant):
-        factory = ProductFactory()
-        simple_variant_product_item = factory.get_simple_variant_product_item(BaseItem, variant)
-        return simple_variant_product_item
-
-
-    def create_configurable_product_item(self, BaseItem, variant_list):
-        configurable_attributes = variant_list[0].configurable_attributes
-        attribute_set = variant_list[0].attribute_set
-
-        factory = ProductFactory()
-        configurable_item = factory.get_configurable_product_item(BaseItem, attribute_set, configurable_attributes)
-        return configurable_item
 
     def parse_item(self, response):
         #self.log('Hi, this is an item page! %s' % response.url)
@@ -125,15 +103,17 @@ class TjmaxxSpider(CrawlSpider):
         
         if len(variant_list)==1:
             #This is if not a variant
-            simple_item = self.create_tjmaxx_simple_product_item(base_item)
+            simple_item = self.factory.create_simple_product_item(base_item)
             yield simple_item
         else:
             for variant in variant_list:
                 #loops through all variants (e.g. simple items)
-                simple_item = self.create_tjmaxx_simple_variant_product_item(base_item, variant)
-                yield simple_item
+                simple_variant_product_item = self.factory.get_simple_variant_product_item(base_item, variant)
+                yield simple_variant_product_item
             
             if len(variant_list)>0:
                 #this is the parent (e.g. configurable product)
-                configurable_item = self.create_configurable_product_item(base_item, variant_list)
+                configurable_attributes = variant_list[0].configurable_attributes
+                attribute_set = variant_list[0].attribute_set
+                configurable_item = self.factory.get_configurable_product_item(base_item, attribute_set, configurable_attributes)
                 yield configurable_item

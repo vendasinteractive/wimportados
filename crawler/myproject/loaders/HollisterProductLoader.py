@@ -35,4 +35,4 @@ class HollisterProductLoader(ItemLoader):
     image_urls_in = MapCompose(add_http)
     image_urls_out = Join()
 
-    category_in = MapCompose(remove_tags, replace_escape_chars, replace_entities, strip_whitespace, append_retailer)
+    categories_in = MapCompose(remove_tags, replace_escape_chars, replace_entities, strip_whitespace, append_retailer)
